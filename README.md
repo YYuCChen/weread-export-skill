@@ -1,72 +1,155 @@
-# weread-export —— 微信读书整本导出
+# weread-export：微信读书导出 Skill
 
 [![tests](https://github.com/YYuCChen/weread-export-skill/actions/workflows/tests.yml/badge.svg)](https://github.com/YYuCChen/weread-export-skill/actions/workflows/tests.yml)
 
-## 这是什么
+把一本微信读书导出成 Markdown、EPUB 和 PDF。
 
-把微信读书的一本书完整导出为 **Markdown / EPUB / PDF**，并生成一份可复核的**核验报告**：
-正文按章节切分、插图按原文位置内嵌、对照平台逐章字数核验可达标。
+你只需要把书的链接发给 Thincoder Agent，剩下的步骤由 Agent 完成。
 
-能力清单：
+## 导出后会得到什么？
 
-- 预检：登录态 / 书籍可读性 / 端到端冒烟 / 平台逐章字数基线（全自动，可复跑）；
-- 导出：逐页抓取（Canvas 文字 + 虚拟 DOM 文字 + 插图），按章节切分保存，中断可续；
-- 核验：平台逐章对照（缺章 / 重复段落 / 重复章节 / 图片引用与文件 / 末章一致 / 字数比例）；
-- 交付：`<书名>.md`（图片内嵌）/ `<书名>.epub` / `<书名>.pdf` / `核验报告.txt` 四件套。
+每本书会有 4 个文件：
 
-目录结构与分工：
+- `<书名>.md`
+- `<书名>.epub`
+- `<书名>.pdf`
+- `核验报告.txt`
 
-| 部件 | 用途 |
-|---|---|
-| `SKILL.md` | agent 入口：适用条件、停询触发点、合规边界、五步流程 |
-| `README.md` | 本文件 —— 给人看的上手说明与故障对照表 |
-| `references/playbook.md` | 「症状 → 判据 → 修法」速查表：踩过的坑与脚本落点 |
-| `scripts/` | 预检 / 导出引擎 / 图片下载 / 核验 / 三格式转换 / 离线后处理 |
-| `scripts/tests/` | 回归测试（导航 / 抓取 / 切章渲染 / 后处理 + 包级检查） |
+核验报告会帮你检查是否存在缺失章节、重复内容或丢失图片。
 
-参考出处：上游开源项目 **`lbq110/weread-exporter`**（本包在其基础上合入本机实测的全部修复）。
-**仅供个人学习研究使用** —— 请勿用于商业用途或大规模传播，请尊重著作权。
+## 使用前请注意
 
-## 工作原理（简版）
+- 你的微信读书账号必须能正常阅读这本书。
+- 第一次使用会弹出浏览器，需要用微信扫码登录。
+- 导出一本书通常需要 10–15 分钟，书越长等待时间越长。
+- 导出时不要关闭自动打开的浏览器。
+- 一次只导出一本，不要同时运行多个导出任务。
 
-1. **Playwright 自动化**：启动本机 Chromium，持久化登录会话（扫码一次，后续自动复用）。
-2. **Canvas fillText Hook**：注入钩子拦截 `fillText` 调用，连同变换矩阵一起记录真实页面坐标
-   （否则标题字会被织进正文行）。
-3. **双页拆分**：同一屏可能并排两个 canvas（左页 + 右页 / 标题页 + 正文页），按 canvas 物理区间分桶。
-4. **虚拟 DOM 通道**：长章节后半段以乱序绝对定位 span 渲染，滚动整章后按文档坐标重建、重叠窗口去重。
-5. **图文交错**：文字行与视口内图片按 y 坐标排序，插图落在对应段落之间；并记录下载名单。
-6. **章节切分**：按「扉页字号 + 目录标题前缀」识别新章节（顶栏标题滞后一页，不可靠）；
-   切章后比较一律归一化，避免重名重复章。
-7. **重放判重**：长章节尾页会被反复重放；按 3-gram 重合度（阈值 0.85）只丢弃几乎完全重复的整页。
-8. **后处理**：跨章断句合拢、行内双写折叠、溢出末行标题下移、封面章补齐、合并稿重建。
-9. **退出码契约（0–7）**：每个脚本以退出码 + `⛔` / `✅` 标记行报告结果，agent 据此稳定分支。
-10. **出错即停**：登录失效 / 访问受限 / 结构变化类失败不静默重试——停下询问（见 `SKILL.md` 停询与升级路径）。
+## Windows 安装（推荐新手按这里操作）
 
-## 环境要求
+### 第 1 步：准备 Python
 
-- Python 3.10+（实测 3.12）；依赖见 `scripts/requirements.txt`（playwright / pytest / anyio / Pillow）。
-- 系统：macOS 已做整本端到端实测；Windows / Linux 共用 Pillow 图片压缩回退、Pandoc 动态解析和系统临时目录。Windows 与 Linux 由 GitHub Actions 运行回归测试。
-- 磁盘：状态目录 + 交付目录合计数十 MB 量级（含插图与 PDF）；登录态约数百 MB（浏览器 profile）。
+安装 [Python 3.10 或更高版本](https://www.python.org/downloads/windows/)。
 
-## 安装到 Thincoder
+安装 Python 时，请勾选 **Add Python to PATH**。
 
-在 Thincoder 项目根目录执行。macOS / Linux：
+安装完成后打开 PowerShell，输入：
+
+```powershell
+py -3 --version
+```
+
+如果能看到 Python 版本号，就可以继续。
+
+### 第 2 步：把 Skill 放进 Thincoder
+
+1. 点击 GitHub 页面右上方的 **Code**。
+2. 点击 **Download ZIP**。
+3. 解压下载的文件。
+4. 把文件夹改名为 `weread-export`。
+5. 把它放到你的项目目录：
+
+```text
+<你的项目>\.thincoder\skills\weread-export
+```
+
+放好后，请确认下面这个文件真实存在：
+
+```text
+<你的项目>\.thincoder\skills\weread-export\SKILL.md
+```
+
+### 第 3 步：安装必要组件
+
+打开 `weread-export` 文件夹。在文件夹空白处点击右键，选择 **在终端中打开**，然后依次复制这 3 条命令：
+
+```powershell
+py -3 -m pip install -r "scripts\requirements.txt"
+py -3 -m playwright install chromium
+winget install --source winget --exact --id JohnMacFarlane.Pandoc
+```
+
+每条命令执行完再执行下一条。安装完成后，重新打开 Thincoder。
+
+## 开始导出
+
+1. 在微信读书中打开想导出的书。
+2. 复制这本书的链接。
+3. 对 Thincoder Agent 说：
+
+> 用 weread-export 把这本书导出：<把链接粘贴在这里>
+
+第一次运行时，按弹出浏览器的提示扫码登录。之后等 Agent 完成即可。
+
+导出成功后，Agent 会告诉你 4 个文件保存在哪里。
+
+## 常见问题
+
+### PowerShell 提示“找不到 py”
+
+Python 没有正确安装。重新安装 Python，并确认勾选了 **Add Python to PATH**。
+
+### PowerShell 提示“找不到 winget”
+
+可以从 [Pandoc 官方下载页](https://github.com/jgm/pandoc/releases/latest) 下载 Windows 安装包。安装完后重新打开 PowerShell 和 Thincoder。
+
+### 提示“找不到 chromium”
+
+在 `weread-export` 文件夹里重新运行：
+
+```powershell
+py -3 -m playwright install chromium
+```
+
+### 需要重新扫码
+
+登录状态可能已失效。在弹出的浏览器中重新扫码，然后让 Agent 重试。
+
+### 导出中途中断了
+
+不需要从头开始。再次把同一个链接发给 Agent，Skill 会尝试从已完成的章节继续。
+
+### 页面显示“去 App 阅读”
+
+这是出版方限制，说明这本书无法通过微信读书网页版导出。
+
+### Windows 显示中文乱码
+
+在 PowerShell 中先运行：
+
+```powershell
+$env:PYTHONUTF8 = "1"
+```
+
+然后重试之前的命令。
+
+<details>
+<summary><strong>macOS / Linux 安装方法</strong></summary>
+
+在 Thincoder 项目根目录执行：
 
 ```bash
 mkdir -p .thincoder/skills
 git clone https://github.com/YYuCChen/weread-export-skill.git \
   .thincoder/skills/weread-export
+cd .thincoder/skills/weread-export
+python3 -m pip install -r scripts/requirements.txt
+python3 -m playwright install chromium
 ```
 
-如果希望在所有项目中使用，可安装到用户级目录：
+再安装 Pandoc：
 
 ```bash
-mkdir -p ~/.thincoder/skills
-git clone https://github.com/YYuCChen/weread-export-skill.git \
-  ~/.thincoder/skills/weread-export
+brew install pandoc          # macOS
+sudo apt install pandoc      # Ubuntu / Debian
 ```
 
-Windows PowerShell（项目级）：
+</details>
+
+<details>
+<summary><strong>会使用 Git？可以用命令安装</strong></summary>
+
+Windows PowerShell：
 
 ```powershell
 New-Item -ItemType Directory -Force ".thincoder\skills" | Out-Null
@@ -74,166 +157,36 @@ git clone https://github.com/YYuCChen/weread-export-skill.git `
   ".thincoder\skills\weread-export"
 ```
 
-Windows PowerShell（用户级）：
+如果想让所有 Thincoder 项目都能使用这个 Skill，可将安装路径换成：
 
-```powershell
-New-Item -ItemType Directory -Force "$HOME\.thincoder\skills" | Out-Null
-git clone https://github.com/YYuCChen/weread-export-skill.git `
-  "$HOME\.thincoder\skills\weread-export"
+```text
+$HOME\.thincoder\skills\weread-export
 ```
 
-安装后可直接对 Agent 说：
+</details>
 
-> 用 weread-export 把这本书导出：<微信读书链接>
+<details>
+<summary><strong>开发者信息</strong></summary>
 
-## 5 分钟上手
+- `SKILL.md`：Thincoder Agent 使用的操作说明。
+- `scripts/`：导出、图片下载、核验和格式转换脚本。
+- `references/playbook.md`：技术原理和故障排查记录。
 
-**第 1 步：安装依赖**
-
-macOS / Linux：
-
-```bash
-cd .thincoder/skills/weread-export
-python3 -m pip install -r scripts/requirements.txt
-python3 -m playwright install chromium
-brew install pandoc          # Linux: sudo apt install pandoc
-```
-
-Windows PowerShell（建议使用 Python Launcher `py`）：
-
-```powershell
-Set-Location ".thincoder\skills\weread-export"
-py -3 -m pip install -r "scripts\requirements.txt"
-py -3 -m playwright install chromium
-winget install --source winget --exact --id JohnMacFarlane.Pandoc
-```
-
-Windows 没有 `winget` 时，可从 [Pandoc 官方 Releases](https://github.com/jgm/pandoc/releases/latest) 安装，或使用 `choco install pandoc`。安装后重开 PowerShell，并用 `pandoc --version` 确认命令已进入 `PATH`。
-
-**第 2 步：扫码登录**（首次一次，之后长期复用）
-
-```bash
-python3 scripts/preflight.py "https://weread.qq.com/web/reader/<book_id>"
-```
-
-Windows PowerShell 把 `python3` 替换为 `py -3`：
-
-```powershell
-py -3 scripts\preflight.py "https://weread.qq.com/web/reader/<book_id>"
-```
-
-首次运行会弹出浏览器窗口 → 用微信扫码登录。登录态保存在 `~/.weread-export/profile/`，换项目不用重扫。
-同一命令顺带完成：登录态 / 可读性 / 端到端冒烟 / 平台逐章字数基线的检查与抓取。
-
-**第 3 步：对 agent 说一句话**
-
-> 用 weread-export 把这本书导出：<链接>
-
-agent 会按 `SKILL.md` 跑完 预检 → 导出 → 核验 → 三格式转换 → 交付四件套。
-
-## 运行节奏与耗时
-
-- 导出速度受翻页等待限制（每页 1–2 秒，防封底线，默认不加速）；整本量级 **约 10–15 分钟**
-  （实测：抓正文 ~6.5 分钟 / 220 页 ÷ 每页 ~1.8 秒 + 后处理与图片 ~3–4 分钟 + 三格式 ~1 分钟；随书长线性变化）。
-- 中途中断（关窗 / 断网 / 手动停止）不会丢进度：重跑同一条命令会从**已完成章节**续起。
-- 图片分两步：抓取时只记录 URL（避免下载阻塞翻页），抓完整本后 8 线程并发下载到 `images/`。
-- 核验与三格式转换都是分钟级；可重复运行，输出覆盖写（幂等）。
-
-## 手动路径（不用 agent）
-
-macOS / Linux：
-
-```bash
-S=.thincoder/skills/weread-export/scripts
-python3 $S/preflight.py "<链接或 book_id>"            # 1 预检 + 平台基线
-python3 $S/export_precise.py "<链接或 book_id>"        # 2 导出（长跑；中断重跑同命令续传）
-python3 $S/download_images.py <book_id>               # 3 图片补齐（可重复运行）
-python3 $S/verify_export.py <book_id> \
-  --report-out "<当前项目目录>/<书名>/核验报告.txt"       # 4 核验（+交付副本）
-python3 $S/make_formats.py \
-  ~/.weread-export/books/<book_id>/<书名>.md "<当前项目目录>/<书名>/"   # 5 三格式
-python3 $S/export_precise.py --postprocess <book_id>  # 不重爬，重跑后处理并重建合并稿
-```
-
-Windows PowerShell：
-
-```powershell
-$SkillScripts = ".thincoder\skills\weread-export\scripts"
-py -3 "$SkillScripts\preflight.py" "<链接或 book_id>"
-py -3 "$SkillScripts\export_precise.py" "<链接或 book_id>"
-py -3 "$SkillScripts\download_images.py" "<book_id>"
-py -3 "$SkillScripts\verify_export.py" "<book_id>" `
-  --report-out "<当前项目目录>\<书名>\核验报告.txt"
-py -3 "$SkillScripts\make_formats.py" `
-  "$HOME\.weread-export\books\<book_id>\<书名>.md" `
-  "<当前项目目录>\<书名>"
-py -3 "$SkillScripts\export_precise.py" --postprocess "<book_id>"
-```
-
-## Windows 使用要点
-
-- 默认状态目录是 `$HOME\.weread-export`；可在当前 PowerShell 会话用 `$env:WEREAD_EXPORT_HOME = "D:\weread-data"` 改到其他磁盘。
-- 如 Pandoc 未进入 `PATH`，可在当前会话设置 `$env:PANDOC = "C:\Program Files\Pandoc\pandoc.exe"`。
-- 路径可包含中文或空格，但在 PowerShell 中应像上面示例一样用双引号包住。
-- 不要同时启动两个导出会话；Chromium profile 会被占用，也会提高账号风控风险。若异常中断后提示 profile 被锁，先关闭残留的 Chromium 进程再重跑。
-- 旧版 Windows 终端如出现中文乱码，先执行 `$env:PYTHONUTF8 = "1"`，再重跑当前命令。中间 JSON / Markdown 文件始终以 UTF-8 读写。
-
-## 常见故障对照表
-
-| 症状 | 原因 | 处理 |
-|---|---|---|
-| `ModuleNotFoundError: playwright` 等 | 依赖未装 | 按「5 分钟上手」第 1 步安装 |
-| 浏览器启动报缺 chromium | chromium 未装 | macOS/Linux：`python3 -m playwright install chromium`；Windows：`py -3 -m playwright install chromium` |
-| 停在登录页 / `⛔ 登录失效`（退出码 2） | 未登录或登录过期 | 在弹出窗口扫码重登，重跑当前步骤 |
-| 详情页或阅读器显示「去 App 阅读」 | 出版社限制网页端 | 此类书无法导出（退出码 3）；换书或去官方 App 阅读 |
-| 0 章秒退 / `⛔ 页面结构可能变化` | 阅读器页面结构变化 | 停下保留现场；对照 playbook「选择器」节排查 |
-| `找不到 pandoc`（退出码 7） | pandoc 未装 | macOS：`brew install pandoc`；Windows：用 `winget` 命令安装，或设置 `$env:PANDOC` |
-| Windows 提示 profile 正在使用 | 上次异常中断留下 Chromium 进程 | 关闭残留 Chromium，再重跑原命令；不要删 profile |
-| Windows 控制台中文乱码 | 旧终端编码不是 UTF-8 | PowerShell 执行 `$env:PYTHONUTF8 = "1"` 后重试 |
-| 图片下载 fail | 网络 / 链接失效 | 重跑 `download_images.py`（已下载的自动跳过） |
-| 中断了怎么续传 | —— | 重跑同一条导出命令，自动从已完成章节续起 |
-| 核验未达标（退出码 5） | 缺章 / 重复 / 失效引用等 | 打开核验报告看不达标字段；对照 playbook「核验基线」节 |
-| 系统提示里看不到本技能 | 系统提示只列部分技能 | 直接说技能名 `weread-export`，或用 skill 工具 list |
-
-## 输出与目录说明
-
-- 状态目录 `~/.weread-export/`（环境变量 `WEREAD_EXPORT_HOME` 可覆盖）：
-  - `profile/` —— 登录态（浏览器持久化目录，跨项目复用）；
-  - `books/<book_id>/` —— 工作数据：`chapters/`（逐章 md）、`raw/`（图片名单与字数）、
-    `images/`（插图与封面）、合并稿 `<书名>.md`、`_catalog.json`、`_meta.json`、
-    平台基线 `_platform_chapterinfo.json`、核验报告 `_verify_report.txt`；
-  - `runs.log` —— 每次导出的开始与结果（供防封单日计数核对）。
-- 交付目录 `<当前项目目录>/<书名>/`：`<书名>.md`（图片 base64 内嵌，单文件自包含）、
-  `<书名>.epub`、`<书名>.pdf`、`核验报告.txt`。
-- 清理状态（含登录态）：macOS/Linux 用 `rm -rf ~/.weread-export`；Windows PowerShell 用 `Remove-Item -Recurse -Force "$HOME\.weread-export"`。这会删除全部续传数据和登录态，下次运行需重新扫码。
-
-## 已知限制
-
-- 需要有效的微信读书账号，且对目标书有阅读权限（无限卡 / 已购买）；
-- 部分出版社限制网页端阅读（「去 App 阅读」），此类书无法导出；
-- 纯图廊章节图片密集时，图注与图的配对偶尔差一位；正文章节里图片相对段落的位置准确；
-- macOS 已做整本端到端实测；Windows / Linux 已进入自动回归矩阵，但不同 Windows 版本上的整本抓取仍需更多真实样本验证。
-
-## 合规与声明
-
-- 仅导出**账号已获阅读权限**的书；不绕过验证码 / 会员 / 付费墙。
-- 导出物**仅个人使用**：不传播、不上传、不分享给不特定人群。
-- 参考出处：`lbq110/weread-exporter`；**仅供个人学习研究使用**，请尊重著作权。
-
-## 与上游的关系
-
-- 参考上游项目 [`lbq110/weread-exporter`](https://github.com/lbq110/weread-exporter)，并已获上游作者授权公开发布。
-- 本仓库不主张上游代码的权利；使用时仍须遵守「仅供个人学习研究使用，请勿用于商业用途或大规模传播」的限制。
-- 本包 = 上游代码 + 本机实测的全部修复（本目录 `references/playbook.md` 逐条记录）；
-  上游后续演进需手动同步（无自动跟踪）。
-
-## 开发与测试
+运行测试：
 
 ```bash
 python3 -m pip install -r scripts/requirements.txt
 python3 -m pytest -q scripts/tests
 ```
 
-Windows PowerShell 使用 `py -3 -m pip ...` 和 `py -3 -m pytest ...`。
+GitHub Actions 会在 Windows 和 Ubuntu 上运行全部回归测试。
 
-GitHub Actions 会在每次 push 和 pull request 时运行同一套回归测试。
+</details>
+
+## 使用范围
+
+本 Skill 只导出你的账号已经获得阅读权限的书，不会绕过验证码、会员限制或付费限制。
+
+导出文件仅供个人学习和研究使用，请勿用于商业用途或大规模传播。
+
+本项目参考了 [`lbq110/weread-exporter`](https://github.com/lbq110/weread-exporter)，并已获上游作者授权公开发布。
