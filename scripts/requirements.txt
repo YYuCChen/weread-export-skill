@@ -1,0 +1,4 @@
+playwright>=1.40
+pytest>=8
+anyio>=4
+Pillow>=10

@@ -1,0 +1,12 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# 运行状态、登录信息与导出产物不应进入仓库
+.weread-export/
+profile/
+books/
+runs.log
