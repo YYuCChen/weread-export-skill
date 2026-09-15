@@ -61,15 +61,33 @@ py -3 --version
 
 ### 第 3 步：安装必要组件
 
-打开 `weread-export` 文件夹。在文件夹空白处点击右键，选择 **在终端中打开**，然后依次复制这 3 条命令：
+打开 `weread-export` 文件夹。在文件夹空白处点击右键，选择 **在终端中打开**。
+
+下面有 3 条命令。**一次只复制一条**，等它执行完成，再复制下一条。
+
+#### 命令 1：安装 Skill 需要的 Python 组件
 
 ```powershell
 py -3 -m pip install -r "scripts\requirements.txt"
+```
+
+等 PowerShell 重新出现可以输入命令的那一行，再继续。
+
+#### 命令 2：安装自动导出用的浏览器
+
+```powershell
 py -3 -m playwright install chromium
+```
+
+这一步会下载浏览器，需要等待一会儿。下载完成后再继续。
+
+#### 命令 3：安装生成 EPUB 和 PDF 需要的 Pandoc
+
+```powershell
 winget install --source winget --exact --id JohnMacFarlane.Pandoc
 ```
 
-每条命令执行完再执行下一条。安装完成后，重新打开 Thincoder。
+3 条命令都执行完成后，关闭并重新打开 Thincoder。
 
 ## 开始导出
 
@@ -77,7 +95,7 @@ winget install --source winget --exact --id JohnMacFarlane.Pandoc
 2. 复制这本书的链接。
 3. 对 Thincoder Agent 说：
 
-> 用 weread-export 把这本书导出：<把链接粘贴在这里>
+> 把这本微信读书给我导出来：<把链接粘贴在这里>
 
 第一次运行时，按弹出浏览器的提示扫码登录。之后等 Agent 完成即可。
 

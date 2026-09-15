@@ -8,7 +8,10 @@ import export_precise
 import weread_common as wc
 
 SKILL_DIR = Path(__file__).resolve().parent.parent.parent
-DESC_LINE = "把微信读书的一本书导出为 Markdown / EPUB / PDF 三种格式，并附一份可复核的核验报告。"
+DESC_LINE = (
+    "当用户说“把这本微信读书给我导出来”或近似表达时，将单本微信读书导出为 "
+    "Markdown、EPUB、PDF，并生成核验报告。"
+)
 
 
 def test_pack_has_four_parts():
