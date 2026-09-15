@@ -207,4 +207,4 @@ GitHub Actions 会在 Windows 和 Ubuntu 上运行全部回归测试。
 
 导出文件仅供个人学习和研究使用，请勿用于商业用途或大规模传播。
 
-本项目参考了 [`lbq110/weread-exporter`](https://github.com/lbq110/weread-exporter)，并已获上游作者授权公开发布。
+本项目参考了 [`lbq110/weread-exporter`](https://github.com/lbq110/weread-exporter)，仅供学习参考使用。
