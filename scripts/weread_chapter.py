@@ -49,7 +49,7 @@ def clean_catalog_title(text: str) -> str:
 def load_heading_titles(catalog_path: str) -> set:
     """从目录缓存读已知标题（归一化），用于识别正文里的标题行。"""
     try:
-        with open(catalog_path) as f:
+        with open(catalog_path, encoding="utf-8") as f:
             titles = json.load(f)
     except Exception:
         return set()

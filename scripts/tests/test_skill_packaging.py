@@ -61,6 +61,12 @@ def test_state_root_layout_under_env_override(monkeypatch, tmp_path):
     assert wc.runs_log() == os.path.join(str(tmp_path), "runs.log")
 
 
+def test_safe_filename_handles_windows_rules():
+    assert wc.safe_filename('A:B?C. ') == "A_B_C"
+    assert wc.safe_filename("CON") == "_CON"
+    assert wc.safe_filename("nul.txt") == "_nul.txt"
+
+
 def test_log_run_writes_tsv_line(monkeypatch, tmp_path):
     """runs.log 行格式 = ISO8601 时间戳 + event + book_id + note。"""
     monkeypatch.setenv("WEREAD_EXPORT_HOME", str(tmp_path))

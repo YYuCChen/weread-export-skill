@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import zipfile
+from pathlib import Path
 
 import weread_common as wc
 
@@ -60,7 +61,8 @@ def resolve_pandoc() -> str:
         return found
     print("⛔ 构建失败：找不到 pandoc。")
     print("   安装：macOS `brew install pandoc`；Ubuntu `sudo apt install pandoc`；")
-    print("   或设置环境变量 $PANDOC 指向可执行文件。")
+    print("   Windows `winget install --source winget --exact --id JohnMacFarlane.Pandoc`。")
+    print("   或设置环境变量 PANDOC 指向可执行文件。")
     return ""
 
 
@@ -175,7 +177,7 @@ def make_pdf(html_path, out_pdf):
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page()
-        page.goto("file://" + os.path.abspath(html_path), wait_until="load")
+        page.goto(Path(html_path).resolve().as_uri(), wait_until="load")
         page.wait_for_timeout(1500)
         page.pdf(path=out_pdf, format="A4", print_background=True,
                  margin={"top": "18mm", "bottom": "20mm",

@@ -124,7 +124,11 @@ def main(book_id, baseline_path=None, report_out=None) -> int:
     img_dir = os.path.join(book_dir, "images")
     merged = [f for f in glob.glob(os.path.join(book_dir, "*.md"))]
     catalog_path = os.path.join(book_dir, "_catalog.json")
-    catalog = json.load(open(catalog_path)) if os.path.exists(catalog_path) else []
+    if os.path.exists(catalog_path):
+        with open(catalog_path, encoding="utf-8") as f:
+            catalog = json.load(f)
+    else:
+        catalog = []
 
     platform = load_platform(baseline_path) if os.path.exists(baseline_path) else []
     plat_total = sum(c["words"] for c in platform)

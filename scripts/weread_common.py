@@ -144,8 +144,15 @@ def classify_page_text(text: str) -> bool:
 
 # ---- 文件名消毒（合并稿与三格式输出同规则）----
 _FILENAME_BAD_RE = re.compile(r'[<>:"/\\|?*]')
+_WINDOWS_RESERVED_NAMES = {
+    "CON", "PRN", "AUX", "NUL",
+    *(f"COM{i}" for i in range(1, 10)),
+    *(f"LPT{i}" for i in range(1, 10)),
+}
 
 
 def safe_filename(name: str) -> str:
-    """书名 → 文件名：Windows 保留字符替换为 `_`。"""
-    return _FILENAME_BAD_RE.sub("_", name)
+    """书名 → 跨平台文件名：处理 Windows 保留字符、尾随点/空格与设备名。"""
+    cleaned = _FILENAME_BAD_RE.sub("_", name).rstrip(" .") or "_"
+    stem = cleaned.split(".", 1)[0].upper()
+    return f"_{cleaned}" if stem in _WINDOWS_RESERVED_NAMES else cleaned

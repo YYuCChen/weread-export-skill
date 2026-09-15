@@ -18,12 +18,13 @@
 ## 前置条件
 
 - 依赖：Python 3.10+、playwright、chromium、pandoc —— 安装命令见 `README.md`「5 分钟上手」。
+- Windows 命令：优先在 PowerShell 使用 `py -3`；下文所有 `python3` 均替换为 `py -3`，路径含空格或中文时必须加引号。
 - 登录：首次运行会弹出浏览器要求扫码；登录态持久化在 `~/.weread-export/profile/`（不随项目走）。
 - 脚本路径：`<skill>/scripts/`（本项目中即 `.thincoder/skills/weread-export/scripts`），下文的命令按该路径给出。
 - 脚本路径解析：项目级优先（`<当前项目目录>/.thincoder/skills/weread-export/scripts/`）；若技能只装在
   用户级 `~/.thincoder/skills/weread-export/scripts/`，把命令里的路径替换为实际位置即可（两处脚本一致）。
 - 状态目录：工作数据在 `~/.weread-export/`（环境变量 `WEREAD_EXPORT_HOME` 可覆盖）；交付物在 `<当前项目目录>/<书名>/`。
-- 状态目录清理：`rm -rf ~/.weread-export` 会连登录态一起清掉（下次运行需重新扫码）。
+- 状态目录清理：macOS/Linux 的 `rm -rf ~/.weread-export` 或 Windows PowerShell 的 `Remove-Item -Recurse -Force "$HOME\.weread-export"` 会连登录态一起清掉（下次运行需重新扫码）。
 
 ## 包结构（速览）
 
@@ -38,7 +39,7 @@
 | `scripts/verify_export.py` | 核验并产出报告（含 `--report-out` 交付副本） |
 | `scripts/make_formats.py` | 三格式转换（md 内嵌 / epub / pdf） |
 | `scripts/weread_*.py` | 引擎模块（共享 / 切章 / 文本 / 抓取 / 导航 / 会话 / 后处理） |
-| `scripts/tests/` | 回归测试（46 项，含包级检查） |
+| `scripts/tests/` | 回归测试（47 项，含包级检查） |
 
 ## 停询触发点（五条）
 
@@ -94,7 +95,7 @@
 
 1. 书目数：这次要导几本？≥2 本 → 见「停询触发点（五条）」表第 1 条。
 2. 今日计数：读 `~/.weread-export/runs.log`，数今天的 `start` 行；≥3 本 → 见同表第 4 条。
-3. 依赖探测：`python3` / playwright / chromium / pandoc 是否就绪；缺 → 给出 README 安装命令并停。
+3. 依赖探测：macOS/Linux 检查 `python3`，Windows 检查 `py -3`；同时检查 playwright / chromium / pandoc。缺 → 给出 README 对应系统的安装命令并停。
 
 ### 步骤 1 预检
 

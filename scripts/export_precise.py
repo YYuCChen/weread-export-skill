@@ -51,7 +51,7 @@ async def main(book_id: str) -> int:
     seen_imgs = set()
     for jf in os.listdir(raw_dir):
         if jf.endswith(".json"):
-            with open(os.path.join(raw_dir, jf)) as f:
+            with open(os.path.join(raw_dir, jf), encoding="utf-8") as f:
                 for img in json.load(f).get("images", []):
                     seen_imgs.add(img["url"])
 

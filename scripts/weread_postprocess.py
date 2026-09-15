@@ -130,9 +130,9 @@ def stitch_chapter_boundaries(md_dir, max_fragment=60, max_sentence=60):
 
 def write_cover_chapter(md_dir, raw_dir, cover_url, cover_file):
     """封面页在网页端是 DOM 简介页，正文通道取不到，单独补一章保证完整性。"""
-    with open(os.path.join(md_dir, "0000.md"), "w") as f:
+    with open(os.path.join(md_dir, "0000.md"), "w", encoding="utf-8") as f:
         f.write(f"# 封面\n\n![封面](images/{cover_file})\n")
-    with open(os.path.join(raw_dir, "0000.json"), "w") as f:
+    with open(os.path.join(raw_dir, "0000.json"), "w", encoding="utf-8") as f:
         json.dump({"title": "封面", "text_len": 0,
                    "images": [{"url": cover_url, "file": cover_file}]},
                   f, ensure_ascii=False)
@@ -184,10 +184,11 @@ def build_merged_md(book_dir, md_dir, book_title, book_author):
     total_files = sorted(f for f in os.listdir(md_dir) if f.endswith(".md"))
     safe = wc.safe_filename(book_title)
     merged = os.path.join(book_dir, f"{safe}.md")
-    with open(merged, "w") as out:
+    with open(merged, "w", encoding="utf-8") as out:
         out.write(f"# {book_title}\n\n**{book_author}**\n\n---\n\n")
         for fn in total_files:
-            out.write(open(os.path.join(md_dir, fn)).read())
+            with open(os.path.join(md_dir, fn), encoding="utf-8") as chapter:
+                out.write(chapter.read())
             out.write("\n\n---\n\n")
     return merged, len(total_files)
 
@@ -201,7 +202,7 @@ def download_all_images(raw_dir, img_dir):
 def download_cover(book_dir, img_dir):
     """下载封面（优先高清变体 t9_，退回 DOM 给的变体），返回 (url, 文件名)。"""
     try:
-        with open(os.path.join(book_dir, "_meta.json")) as f:
+        with open(os.path.join(book_dir, "_meta.json"), encoding="utf-8") as f:
             cover_url = json.load(f).get("cover", "")
     except Exception:
         cover_url = ""

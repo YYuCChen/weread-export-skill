@@ -81,14 +81,14 @@ def get_last_chapter_title(md_dir):
     if not files:
         return None, 0
     idx = int(files[-1].replace(".md", ""))
-    with open(os.path.join(md_dir, files[-1])) as f:
+    with open(os.path.join(md_dir, files[-1]), encoding="utf-8") as f:
         title = f.readline().strip().replace("# ", "")
     return title, idx
 
 
 def load_last_catalog_title(catalog_path):
     try:
-        with open(catalog_path) as f:
+        with open(catalog_path, encoding="utf-8") as f:
             titles = json.load(f)
         return clean_catalog_title(titles[-1]) if titles else ""
     except Exception:
@@ -119,7 +119,7 @@ async def goto_first_chapter(page, catalog_path=None):
         titles = await page.evaluate("""() => Array.from(
             document.querySelectorAll('.readerCatalog_list_item')).map(el => el.textContent.trim())""")
         if titles and catalog_path:
-            with open(catalog_path, "w") as f:
+            with open(catalog_path, "w", encoding="utf-8") as f:
                 json.dump(titles, f, ensure_ascii=False)
         await page.evaluate("""() => {
             const sc = document.querySelector('.readerCatalog_list_scroll_area, [class*="readerCatalog_list_scroll"]');
@@ -137,7 +137,7 @@ async def goto_first_chapter(page, catalog_path=None):
             }""")
             if cover:
                 with open(os.path.join(os.path.dirname(catalog_path), "_meta.json"),
-                          "w") as f:
+                          "w", encoding="utf-8") as f:
                     json.dump({"cover": cover}, f, ensure_ascii=False)
         await close_catalog_if_reader_hidden(page)
         await _sleep(2)

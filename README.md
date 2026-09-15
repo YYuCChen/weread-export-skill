@@ -45,12 +45,12 @@
 ## 环境要求
 
 - Python 3.10+（实测 3.12）；依赖见 `scripts/requirements.txt`（playwright / pytest / anyio / Pillow）。
-- 系统：macOS 为主（sips 压缩图）；Windows / Linux 尽力可跑（Pillow 回退、pandoc 动态解析、临时目录取系统值）。
+- 系统：macOS 已做整本端到端实测；Windows / Linux 共用 Pillow 图片压缩回退、Pandoc 动态解析和系统临时目录。Windows 与 Linux 由 GitHub Actions 运行回归测试。
 - 磁盘：状态目录 + 交付目录合计数十 MB 量级（含插图与 PDF）；登录态约数百 MB（浏览器 profile）。
 
 ## 安装到 Thincoder
 
-在 Thincoder 项目根目录执行：
+在 Thincoder 项目根目录执行。macOS / Linux：
 
 ```bash
 mkdir -p .thincoder/skills
@@ -66,13 +66,31 @@ git clone https://github.com/YYuCChen/weread-export-skill.git \
   ~/.thincoder/skills/weread-export
 ```
 
+Windows PowerShell（项目级）：
+
+```powershell
+New-Item -ItemType Directory -Force ".thincoder\skills" | Out-Null
+git clone https://github.com/YYuCChen/weread-export-skill.git `
+  ".thincoder\skills\weread-export"
+```
+
+Windows PowerShell（用户级）：
+
+```powershell
+New-Item -ItemType Directory -Force "$HOME\.thincoder\skills" | Out-Null
+git clone https://github.com/YYuCChen/weread-export-skill.git `
+  "$HOME\.thincoder\skills\weread-export"
+```
+
 安装后可直接对 Agent 说：
 
 > 用 weread-export 把这本书导出：<微信读书链接>
 
 ## 5 分钟上手
 
-**第 1 步：安装依赖**（macOS 示例；Linux 把 `brew` 换成对应包管理器命令）
+**第 1 步：安装依赖**
+
+macOS / Linux：
 
 ```bash
 cd .thincoder/skills/weread-export
@@ -81,10 +99,27 @@ python3 -m playwright install chromium
 brew install pandoc          # Linux: sudo apt install pandoc
 ```
 
+Windows PowerShell（建议使用 Python Launcher `py`）：
+
+```powershell
+Set-Location ".thincoder\skills\weread-export"
+py -3 -m pip install -r "scripts\requirements.txt"
+py -3 -m playwright install chromium
+winget install --source winget --exact --id JohnMacFarlane.Pandoc
+```
+
+Windows 没有 `winget` 时，可从 [Pandoc 官方 Releases](https://github.com/jgm/pandoc/releases/latest) 安装，或使用 `choco install pandoc`。安装后重开 PowerShell，并用 `pandoc --version` 确认命令已进入 `PATH`。
+
 **第 2 步：扫码登录**（首次一次，之后长期复用）
 
 ```bash
 python3 scripts/preflight.py "https://weread.qq.com/web/reader/<book_id>"
+```
+
+Windows PowerShell 把 `python3` 替换为 `py -3`：
+
+```powershell
+py -3 scripts\preflight.py "https://weread.qq.com/web/reader/<book_id>"
 ```
 
 首次运行会弹出浏览器窗口 → 用微信扫码登录。登录态保存在 `~/.weread-export/profile/`，换项目不用重扫。
@@ -106,6 +141,8 @@ agent 会按 `SKILL.md` 跑完 预检 → 导出 → 核验 → 三格式转换 
 
 ## 手动路径（不用 agent）
 
+macOS / Linux：
+
 ```bash
 S=.thincoder/skills/weread-export/scripts
 python3 $S/preflight.py "<链接或 book_id>"            # 1 预检 + 平台基线
@@ -118,16 +155,41 @@ python3 $S/make_formats.py \
 python3 $S/export_precise.py --postprocess <book_id>  # 不重爬，重跑后处理并重建合并稿
 ```
 
+Windows PowerShell：
+
+```powershell
+$SkillScripts = ".thincoder\skills\weread-export\scripts"
+py -3 "$SkillScripts\preflight.py" "<链接或 book_id>"
+py -3 "$SkillScripts\export_precise.py" "<链接或 book_id>"
+py -3 "$SkillScripts\download_images.py" "<book_id>"
+py -3 "$SkillScripts\verify_export.py" "<book_id>" `
+  --report-out "<当前项目目录>\<书名>\核验报告.txt"
+py -3 "$SkillScripts\make_formats.py" `
+  "$HOME\.weread-export\books\<book_id>\<书名>.md" `
+  "<当前项目目录>\<书名>"
+py -3 "$SkillScripts\export_precise.py" --postprocess "<book_id>"
+```
+
+## Windows 使用要点
+
+- 默认状态目录是 `$HOME\.weread-export`；可在当前 PowerShell 会话用 `$env:WEREAD_EXPORT_HOME = "D:\weread-data"` 改到其他磁盘。
+- 如 Pandoc 未进入 `PATH`，可在当前会话设置 `$env:PANDOC = "C:\Program Files\Pandoc\pandoc.exe"`。
+- 路径可包含中文或空格，但在 PowerShell 中应像上面示例一样用双引号包住。
+- 不要同时启动两个导出会话；Chromium profile 会被占用，也会提高账号风控风险。若异常中断后提示 profile 被锁，先关闭残留的 Chromium 进程再重跑。
+- 旧版 Windows 终端如出现中文乱码，先执行 `$env:PYTHONUTF8 = "1"`，再重跑当前命令。中间 JSON / Markdown 文件始终以 UTF-8 读写。
+
 ## 常见故障对照表
 
 | 症状 | 原因 | 处理 |
 |---|---|---|
 | `ModuleNotFoundError: playwright` 等 | 依赖未装 | 按「5 分钟上手」第 1 步安装 |
-| 浏览器启动报缺 chromium | chromium 未装 | `python3 -m playwright install chromium` |
+| 浏览器启动报缺 chromium | chromium 未装 | macOS/Linux：`python3 -m playwright install chromium`；Windows：`py -3 -m playwright install chromium` |
 | 停在登录页 / `⛔ 登录失效`（退出码 2） | 未登录或登录过期 | 在弹出窗口扫码重登，重跑当前步骤 |
 | 详情页或阅读器显示「去 App 阅读」 | 出版社限制网页端 | 此类书无法导出（退出码 3）；换书或去官方 App 阅读 |
 | 0 章秒退 / `⛔ 页面结构可能变化` | 阅读器页面结构变化 | 停下保留现场；对照 playbook「选择器」节排查 |
-| `找不到 pandoc`（退出码 7） | pandoc 未装 | `brew install pandoc`，或设置 `$PANDOC` 指向可执行文件 |
+| `找不到 pandoc`（退出码 7） | pandoc 未装 | macOS：`brew install pandoc`；Windows：用 `winget` 命令安装，或设置 `$env:PANDOC` |
+| Windows 提示 profile 正在使用 | 上次异常中断留下 Chromium 进程 | 关闭残留 Chromium，再重跑原命令；不要删 profile |
+| Windows 控制台中文乱码 | 旧终端编码不是 UTF-8 | PowerShell 执行 `$env:PYTHONUTF8 = "1"` 后重试 |
 | 图片下载 fail | 网络 / 链接失效 | 重跑 `download_images.py`（已下载的自动跳过） |
 | 中断了怎么续传 | —— | 重跑同一条导出命令，自动从已完成章节续起 |
 | 核验未达标（退出码 5） | 缺章 / 重复 / 失效引用等 | 打开核验报告看不达标字段；对照 playbook「核验基线」节 |
@@ -143,14 +205,14 @@ python3 $S/export_precise.py --postprocess <book_id>  # 不重爬，重跑后处
   - `runs.log` —— 每次导出的开始与结果（供防封单日计数核对）。
 - 交付目录 `<当前项目目录>/<书名>/`：`<书名>.md`（图片 base64 内嵌，单文件自包含）、
   `<书名>.epub`、`<书名>.pdf`、`核验报告.txt`。
-- 清理状态（含登录态）：`rm -rf ~/.weread-export`（下次运行需重新扫码）。
+- 清理状态（含登录态）：macOS/Linux 用 `rm -rf ~/.weread-export`；Windows PowerShell 用 `Remove-Item -Recurse -Force "$HOME\.weread-export"`。这会删除全部续传数据和登录态，下次运行需重新扫码。
 
 ## 已知限制
 
 - 需要有效的微信读书账号，且对目标书有阅读权限（无限卡 / 已购买）；
 - 部分出版社限制网页端阅读（「去 App 阅读」），此类书无法导出；
 - 纯图廊章节图片密集时，图注与图的配对偶尔差一位；正文章节里图片相对段落的位置准确；
-- 以 macOS 为主；Windows / Linux 尽力可跑（无硬编码本机路径，图压缩有 Pillow 回退）。
+- macOS 已做整本端到端实测；Windows / Linux 已进入自动回归矩阵，但不同 Windows 版本上的整本抓取仍需更多真实样本验证。
 
 ## 合规与声明
 
@@ -171,5 +233,7 @@ python3 $S/export_precise.py --postprocess <book_id>  # 不重爬，重跑后处
 python3 -m pip install -r scripts/requirements.txt
 python3 -m pytest -q scripts/tests
 ```
+
+Windows PowerShell 使用 `py -3 -m pip ...` 和 `py -3 -m pytest ...`。
 
 GitHub Actions 会在每次 push 和 pull request 时运行同一套回归测试。

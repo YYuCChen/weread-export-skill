@@ -54,7 +54,7 @@ def download_one(url, fpath, retries=wc.THROTTLE["download_retries"],
 def collect_tasks(raw_dir, img_dir):
     tasks = []
     for jf in sorted(glob.glob(os.path.join(raw_dir, "*.json"))):
-        with open(jf) as f:
+        with open(jf, encoding="utf-8") as f:
             for im in json.load(f).get("images", []):
                 tasks.append((im["url"], os.path.join(img_dir, im["file"])))
     return tasks

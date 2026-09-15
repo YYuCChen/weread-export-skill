@@ -257,9 +257,9 @@ def render_chapter_md(ch_title, blocks, ch_idx, headings=()):
 def save_chapter(ch_title, blocks, ch_idx, md_dir, raw_dir, headings=()):
     body, img_records = render_chapter_md(ch_title, blocks, ch_idx, headings)
     text_len = sum(len(b["text"]) for b in blocks if b["type"] == "text")
-    with open(os.path.join(md_dir, f"{ch_idx:04d}.md"), "w") as f:
+    with open(os.path.join(md_dir, f"{ch_idx:04d}.md"), "w", encoding="utf-8") as f:
         f.write(body)
-    with open(os.path.join(raw_dir, f"{ch_idx:04d}.json"), "w") as f:
+    with open(os.path.join(raw_dir, f"{ch_idx:04d}.json"), "w", encoding="utf-8") as f:
         json.dump({"title": ch_title, "images": img_records, "text_len": text_len},
                   f, ensure_ascii=False)
     return text_len, img_records
