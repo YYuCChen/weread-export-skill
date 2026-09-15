@@ -77,6 +77,25 @@ def profile_dir() -> str:
     return os.path.join(state_root(), "profile")
 
 
+def backup_profile() -> str:
+    """把旧登录态改名备份，返回备份路径；不存在旧登录态时返回空串。
+
+    不直接删除 profile，避免用户误操作后无法恢复。时间戳相同的极端情况
+    会自动追加序号；书籍、运行日志和续传进度均不受影响。
+    """
+    source = profile_dir()
+    if not os.path.exists(source):
+        return ""
+    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    target = os.path.join(state_root(), f"profile.backup-{stamp}")
+    suffix = 1
+    while os.path.exists(target):
+        target = os.path.join(state_root(), f"profile.backup-{stamp}-{suffix}")
+        suffix += 1
+    os.replace(source, target)
+    return target
+
+
 def book_dir(book_id: str) -> str:
     return os.path.join(state_root(), "books", book_id)
 

@@ -197,6 +197,7 @@ def render_chapter_md(ch_title, blocks, ch_idx, headings=()):
     para = []
     img_records = []
     img_seq = 0
+    archive_seq = 0
     self_key = normalize_title(ch_title)
 
     def flush_para():
@@ -242,12 +243,19 @@ def render_chapter_md(ch_title, blocks, ch_idx, headings=()):
     for b in blocks:
         if b["type"] == "text":
             para.append(b["text"])
-        else:
+        elif b["type"] == "img":
             flush_para()
             img_seq += 1
             fname = img_filename(b["src"], ch_idx, img_seq)
             out.append(f"![图](images/{fname})")
             img_records.append({"url": b["src"], "file": fname})
+        elif b["type"] == "archive":
+            flush_para()
+            archive_seq += 1
+            archive_id = f"ch{ch_idx:04d}_arc{archive_seq:03d}"
+            out.append(f"<!-- WEREAD_IMAGE_ARCHIVE:{archive_id} -->")
+            img_records.append({"kind": "archive", "url": b["src"],
+                                "archive_id": archive_id})
     flush_para()
 
     body = "\n\n".join(out) + "\n"

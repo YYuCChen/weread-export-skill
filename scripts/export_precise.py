@@ -17,7 +17,7 @@ import weread_postprocess as postprocess
 import weread_session as session_mod
 
 # —— 测试与验收引用名的显式再导出（共 32 名，禁用 import *；清单见设计档 §2.4.8-D）——
-from weread_capture import (CANVAS_BOTTOM_JS, CANVAS_HOOK, CANVAS_RECTS_JS,
+from weread_capture import (ARCHIVE_URLS_JS, CANVAS_BOTTOM_JS, CANVAS_HOOK, CANVAS_RECTS_JS,
                             POSITIONED_DOM_JS, VIEWPORT_IMGS_JS,
                             capture_current_page, capture_full_chapter,
                             force_repaint)
@@ -34,12 +34,20 @@ from weread_text import (best_cover_url, build_page_blocks, chars_to_lines,
                          text_already_seen, text_grams)
 
 
-async def main(book_id: str) -> int:
+async def main(book_id: str, relogin: bool = False) -> int:
     """导出主流程：会话循环 → 封面/后处理 → 图片下载 → 合并稿；返回退出码。"""
     print("=" * 60)
     print("  weread-exporter — 精确图文导出 v3（weread-export skill）")
     print("=" * 60)
     wc.log_run("start", book_id, "")
+    if relogin:
+        try:
+            backup = wc.backup_profile()
+        except OSError as exc:
+            print(f"  ⛔ 无法备份旧登录态：{exc}")
+            print("  请先关闭仍在运行的微信读书导出浏览器，再重试。")
+            return wc.EXIT_USAGE
+        print(f"  已备份旧登录态：{backup}" if backup else "  没有旧登录态，将重新登录。")
     os.makedirs(wc.profile_dir(), exist_ok=True)
     book_dir = wc.book_dir(book_id)
     md_dir = os.path.join(book_dir, "chapters")
@@ -134,6 +142,10 @@ if __name__ == "__main__":
             print("用法: python3 export_precise.py --postprocess <book_id>")
             sys.exit(wc.EXIT_USAGE)
         sys.exit(postprocess.postprocess_book(sys.argv[2].strip().rstrip("/")))
-    _book_id = wc.parse_book_id(sys.argv[1])
+    _args = [arg for arg in sys.argv[1:] if arg != "--relogin"]
+    if len(_args) != 1:
+        print("用法: python3 export_precise.py <book_url_or_id> [--relogin]")
+        sys.exit(wc.EXIT_USAGE)
+    _book_id = wc.parse_book_id(_args[0])
     print(f"  Book ID: {_book_id}")
-    sys.exit(asyncio.run(main(_book_id)))
+    sys.exit(asyncio.run(main(_book_id, "--relogin" in sys.argv[1:])))

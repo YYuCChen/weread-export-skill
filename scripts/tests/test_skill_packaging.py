@@ -64,6 +64,19 @@ def test_state_root_layout_under_env_override(monkeypatch, tmp_path):
     assert wc.runs_log() == os.path.join(str(tmp_path), "runs.log")
 
 
+def test_backup_profile_is_recoverable(monkeypatch, tmp_path):
+    monkeypatch.setenv("WEREAD_EXPORT_HOME", str(tmp_path))
+    profile = Path(wc.profile_dir())
+    profile.mkdir()
+    (profile / "cookie").write_text("kept", encoding="utf-8")
+
+    backup = Path(wc.backup_profile())
+
+    assert not profile.exists()
+    assert backup.name.startswith("profile.backup-")
+    assert (backup / "cookie").read_text(encoding="utf-8") == "kept"
+
+
 def test_safe_filename_handles_windows_rules():
     assert wc.safe_filename('A:B?C. ') == "A_B_C"
     assert wc.safe_filename("CON") == "_CON"
@@ -151,3 +164,35 @@ def test_verify_report_missing_product_dir(monkeypatch, tmp_path):
     import verify_export
 
     assert verify_export.main("dcc32bc0813abbeeag013b75") == wc.EXIT_MISSING_INPUT
+
+
+def test_verify_report_flags_another_chapter_heading(monkeypatch, tmp_path):
+    monkeypatch.setenv("WEREAD_EXPORT_HOME", str(tmp_path))
+    book_dir = _write_product(
+        tmp_path,
+        {"0001.md": "# 第一章\n\n第一章正文写得足够完整。\n\n第二章 新开始\n\n后续内容。\n",
+         "0002.md": "# 第二章 新开始\n\n本章正文。\n"},
+        [{"chapterIdx": 1, "title": "第一章", "wordCount": 10, "level": 1},
+         {"chapterIdx": 2, "title": "第二章 新开始", "wordCount": 5, "level": 1}])
+    import verify_export
+
+    code = verify_export.main("dcc32bc0813abbeeag013b75")
+
+    assert code == wc.EXIT_VERIFY_FAIL
+    report = (book_dir / "_verify_report.txt").read_text(encoding="utf-8")
+    assert "疑似串章（出现另一章标题）: 1 处" in report
+
+
+def test_verify_report_fails_unexpanded_image_archive(monkeypatch, tmp_path):
+    monkeypatch.setenv("WEREAD_EXPORT_HOME", str(tmp_path))
+    book_dir = _write_product(
+        tmp_path,
+        {"0001.md": "# 漫画章\n\n<!-- WEREAD_IMAGE_ARCHIVE:ch0001_arc001 -->\n"},
+        [{"chapterIdx": 1, "title": "漫画章", "wordCount": 0, "level": 1}])
+    import verify_export
+
+    code = verify_export.main("dcc32bc0813abbeeag013b75")
+
+    assert code == wc.EXIT_VERIFY_FAIL
+    report = (book_dir / "_verify_report.txt").read_text(encoding="utf-8")
+    assert "未展开的图片包章节: ['0001.md']" in report

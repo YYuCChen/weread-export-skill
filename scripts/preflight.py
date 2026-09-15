@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """导出前预检：登录态 / 目标书网页可读性 / 端到端冒烟 / 平台逐章字数基线。
 
-用法: python3 preflight.py <book_url_or_id>
+用法: python3 preflight.py <book_url_or_id> [--relogin]
 只读检查（不抓正文）；只写状态目录（登录态与 <book_dir>/_platform_chapterinfo.json）。
 退出码：0 通过 / 2 需登录 / 3 访问受限 / 4 结构信号 / 1 用法错误。
 """
@@ -163,9 +163,17 @@ async def fetch_baseline(page, book_dir):
     return True, f"{len(chapters)} 章"
 
 
-async def main(book_id) -> int:
+async def main(book_id, relogin=False) -> int:
     book_dir = wc.book_dir(book_id)
     result = {"book_id": book_id}
+    if relogin:
+        try:
+            backup = wc.backup_profile()
+        except OSError as exc:
+            print(f"  ⛔ 无法备份旧登录态：{exc}")
+            print("  请先关闭仍在运行的微信读书导出浏览器，再重试。")
+            return wc.EXIT_USAGE
+        print(f"  已备份旧登录态：{backup}" if backup else "  没有旧登录态，将重新登录。")
     async with async_playwright() as p:
         ctx = await p.chromium.launch_persistent_context(
             wc.profile_dir(), headless=False, viewport={"width": 1200, "height": 900},
@@ -262,11 +270,12 @@ async def main(book_id) -> int:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("用法: python3 preflight.py <book_url_or_id>")
+    args = [arg for arg in sys.argv[1:] if arg != "--relogin"]
+    if len(args) != 1:
+        print("用法: python3 preflight.py <book_url_or_id> [--relogin]")
         sys.exit(wc.EXIT_USAGE)
     try:
-        sys.exit(asyncio.run(main(wc.parse_book_id(sys.argv[1]))))
+        sys.exit(asyncio.run(main(wc.parse_book_id(args[0]), "--relogin" in sys.argv[1:])))
     except KeyboardInterrupt:
         print("\n  已中断（重跑同命令即可；登录态不受影响）")
         sys.exit(wc.EXIT_USAGE)

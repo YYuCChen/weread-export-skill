@@ -12,9 +12,47 @@ from weread_common import THROTTLE, _sleep
 from weread_text import (build_page_blocks, chars_to_lines,
                          merge_positioned_chars, text_already_seen, text_grams)
 
-CANVAS_HOOK = """
+CANVAS_HOOK = r"""
 (function() {
     window.__wr_chars = [];
+    window.__wr_archives = [];
+    window.__wr_archive_seen = {};
+    function rememberArchives(value) {
+        var text = typeof value === 'string' ? value : '';
+        var matches = text.match(/https?:[^\"'\\\\\s]+?\.tar(?:\?[^\"'\\\\\s]*)?/ig) || [];
+        matches.forEach(function(url) {
+            url = url.replace(/&amp;/g, '&').replace(/\\u0026/g, '&')
+                     .replace(/\\\\\//g, '/');
+            if (!window.__wr_archive_seen[url]) {
+                window.__wr_archive_seen[url] = true;
+                window.__wr_archives.push(url);
+            }
+        });
+    }
+    var origFetch = window.fetch;
+    if (origFetch) {
+        window.fetch = function() {
+            return origFetch.apply(this, arguments).then(function(response) {
+                try { response.clone().text().then(rememberArchives).catch(function() {}); }
+                catch (_) {}
+                rememberArchives(response.url || '');
+                return response;
+            });
+        };
+    }
+    var origOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function() {
+        this.__wr_url = arguments[1] || '';
+        return origOpen.apply(this, arguments);
+    };
+    var origSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function() {
+        this.addEventListener('load', function() {
+            rememberArchives(this.__wr_url || '');
+            try { rememberArchives(this.responseText || ''); } catch (_) {}
+        });
+        return origSend.apply(this, arguments);
+    };
     var origFill = CanvasRenderingContext2D.prototype.fillText;
     CanvasRenderingContext2D.prototype.fillText = function(text, x, y) {
         if (text && text.trim()) {
@@ -35,6 +73,12 @@ CANVAS_HOOK = """
     };
     window.__wr_reset = function() { window.__wr_chars = []; };
     window.__wr_count = function() { return window.__wr_chars.length; };
+    window.__wr_take_archives = function() {
+        rememberArchives(document.documentElement.innerHTML || '');
+        var out = window.__wr_archives.slice();
+        window.__wr_archives = [];
+        return out;
+    };
     // 把 canvas 本地坐标换算成页面坐标（加上画布位置与位图/CSS 尺寸比）
     window.__wr_chars_page = function() {
         var rects = new Map();
@@ -102,6 +146,8 @@ CANVAS_BOTTOM_JS = """() => {
         });
     return bottoms.length ? Math.max(...bottoms) : 0;
 }"""
+
+ARCHIVE_URLS_JS = "() => window.__wr_take_archives ? window.__wr_take_archives() : []"
 
 
 async def capture_positioned_dom(page, min_y, seen_imgs):
@@ -194,6 +240,12 @@ async def capture_current_page(page: Page, ch_blocks, seen_imgs, seen_grams=None
     rects = await page.evaluate(CANVAS_RECTS_JS)
     imgs = await page.evaluate(VIEWPORT_IMGS_JS)
     new_blocks = build_page_blocks(chars, imgs, rects, seen_imgs)
+    archives = await page.evaluate(ARCHIVE_URLS_JS)
+    for url in archives:
+        marker = f"archive:{url}"
+        if marker not in seen_imgs:
+            seen_imgs.add(marker)
+            new_blocks.append({"type": "archive", "src": url})
     return accept_blocks(new_blocks, ch_blocks, seen_grams) > 0
 
 

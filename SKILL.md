@@ -37,11 +37,11 @@
 | `references/playbook.md` | 症状 → 判据 → 修法速查表（30 条实测坑） |
 | `scripts/preflight.py` | 预检：登录 / 可读性 / 端到端冒烟 / 平台逐章基线 |
 | `scripts/export_precise.py` | 导出引擎入口（含 `--postprocess` 离线后处理） |
-| `scripts/download_images.py` | 图片并发下载 / 补齐（可重复运行） |
-| `scripts/verify_export.py` | 核验并产出报告（含 `--report-out` 交付副本） |
+| `scripts/download_images.py` | 普通图片与 TAR 图片包下载 / 补齐（可重复运行） |
+| `scripts/verify_export.py` | 低 Token 核验并产出报告（含 `--report-out`、`--verbose`） |
 | `scripts/make_formats.py` | 三格式转换（md 内嵌 / epub / pdf） |
 | `scripts/weread_*.py` | 引擎模块（共享 / 切章 / 文本 / 抓取 / 导航 / 会话 / 后处理） |
-| `scripts/tests/` | 回归测试（47 项，含包级检查） |
+| `scripts/tests/` | 回归测试（54 项，含包级检查） |
 
 ## 停询触发点（五条）
 
@@ -110,6 +110,14 @@ python3 .thincoder/skills/weread-export/scripts/preflight.py "<链接或 book_id
 
 首次运行需要在弹出的浏览器窗口里扫码登录（等待扫码 = 正常流程，不是失败）；登录态此后长期复用。
 
+若用户要求重新登录，或旧登录态损坏，运行：
+
+```bash
+python3 .thincoder/skills/weread-export/scripts/preflight.py "<链接或 book_id>" --relogin
+```
+
+`--relogin` 会把旧 `profile` 改名备份，不删除书籍进度；Windows 将 `python3` 换成 `py -3`。
+
 任一 `⛔` 标记 → 走下方「失败升级路径」。
 
 ### 步骤 2 导出
@@ -146,6 +154,8 @@ python3 .thincoder/skills/weread-export/scripts/verify_export.py <book_id> \
 通过判据：退出码 0 且报告含 `核验结论: ✅ 达标`。
 未达标（退出码 5）→ **停下如实报告，不自动重跑**，交用户裁决。
 报告同时默认写一份到状态目录（`books/<book_id>/_verify_report.txt`）；`--report-out` 是交付副本。
+默认终端只打印结论和计数，逐章明细留在报告文件中；只有排错确有需要时才加 `--verbose`。
+图片只在本机读取文件头和大小，不上传图片、不做 OCR，也不要把图片/base64 或整份漫画载入 Agent 上下文。
 
 ### 步骤 4 转格式
 

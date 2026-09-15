@@ -119,6 +119,8 @@ class StaleCanvasPage:
             return []
         if expression == export_precise.VIEWPORT_IMGS_JS:
             return []
+        if expression == export_precise.ARCHIVE_URLS_JS:
+            return []
         if expression == export_precise.CANVAS_BOTTOM_JS:
             return 0
         if expression == "() => window.__wr_count()":
@@ -164,6 +166,8 @@ class TwoCanvasPage:
             return [{"left": 120, "top": 60, "w": 361, "h": 770},
                     {"left": 670, "top": 60, "w": 361, "h": 770}]
         if expression == export_precise.VIEWPORT_IMGS_JS:
+            return []
+        if expression == export_precise.ARCHIVE_URLS_JS:
             return []
         if expression == export_precise.CANVAS_BOTTOM_JS:
             return 0

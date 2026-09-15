@@ -117,3 +117,12 @@ def test_save_chapter_keeps_empty_catalog_page(tmp_path) -> None:
     assert images == []
     assert (markdown_dir / "0001.md").read_text(encoding="utf-8") == "# 版权信息\n\n"
     assert (raw_dir / "0001.json").exists()
+
+
+def test_render_chapter_keeps_image_archive_placeholder() -> None:
+    body, images = export_precise.render_chapter_md(
+        "漫画章", [{"type": "archive", "src": "https://example.com/chapter.tar"}], 8)
+
+    assert "<!-- WEREAD_IMAGE_ARCHIVE:ch0008_arc001 -->" in body
+    assert images == [{"kind": "archive", "url": "https://example.com/chapter.tar",
+                       "archive_id": "ch0008_arc001"}]

@@ -114,6 +114,24 @@ def test_canvas_hook_reports_transformed_page_coordinates() -> None:
     assert chars == [{"t": "标题", "x": 60, "y": 60, "s": 10}]
 
 
+def test_canvas_hook_discovers_tar_image_package() -> None:
+    async def scenario():
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(headless=True)
+            page = await browser.new_page()
+            await page.set_content(
+                '<div data-package="https://cdn.example.com/comic.tar?a=1&amp;b=2"></div>')
+            await page.add_script_tag(content=export_precise.CANVAS_HOOK)
+            archives = await page.evaluate(export_precise.ARCHIVE_URLS_JS)
+            await browser.close()
+            return archives
+
+    import asyncio as _asyncio
+
+    assert _asyncio.run(scenario()) == [
+        "https://cdn.example.com/comic.tar?a=1&b=2"]
+
+
 def test_split_spread_by_canvas_keeps_pages_apart_on_shared_rows() -> None:
     """A title page drawn beside body text must not interleave into its lines."""
     chars = [
@@ -183,6 +201,8 @@ def test_capture_current_page_drops_replayed_page(monkeypatch) -> None:
             if expression == export_precise.CANVAS_RECTS_JS:
                 return []
             if expression == export_precise.VIEWPORT_IMGS_JS:
+                return []
+            if expression == export_precise.ARCHIVE_URLS_JS:
                 return []
             raise AssertionError(expression)
 

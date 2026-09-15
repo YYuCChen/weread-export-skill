@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """导出核验：把产物与平台元数据逐章对照，输出可复核的核验报告。
 
-用法: python3 verify_export.py <book_id> [平台章节清单.json] [--report-out <路径>]
+用法: python3 verify_export.py <book_id> [平台章节清单.json] [--report-out <路径>] [--verbose]
 - 产物目录 = 状态根下的 <book_dir>（books/<book_id>/）。
 - 平台基线默认 = <book_dir>/_platform_chapterinfo.json（预检生成）；位置参数可覆盖。
 - 报告默认写 <book_dir>/_verify_report.txt；--report-out 另写一份交付副本（自动建父目录）。
@@ -22,7 +22,9 @@ from weread_chapter import normalize_title
 
 CJK_RE = re.compile(r'[\u3400-\u4dbf\u4e00-\u9fff]')
 MD_IMG_RE = re.compile(r'!\[[^\]]*\]\(([^)]+)\)')
+ARCHIVE_MARKER_RE = re.compile(r'<!--\s*WEREAD_IMAGE_ARCHIVE:[^>]+-->')
 HEADING_RE = re.compile(r'^#\s+', re.MULTILINE)
+SENTENCE_END = set("。！？!?；;…）)】]》”’」』")
 
 MAGIC = (
     (b'\xff\xd8\xff', 'jpeg'),
@@ -89,6 +91,56 @@ def find_embedded_titles(book_dir, chapter_stats, platform):
     return glued, interleaved
 
 
+def find_boundary_anomalies(book_dir, chapter_stats, platform):
+    """找高置信度串章，以及后处理后仍可疑的断头/断尾边界。"""
+    title_map = {normalize_title(c["title"]): c["title"] for c in platform
+                 if len(normalize_title(c["title"])) >= 2}
+    merged, cut_heads, cut_tails = [], [], []
+    bodies = []
+    for st in chapter_stats:
+        path = os.path.join(book_dir, "chapters", st["file"])
+        raw_lines = Path(path).read_text(encoding="utf-8").splitlines()
+        content = [(i, line.strip().strip("*")) for i, line in enumerate(raw_lines, 1)
+                   if line.strip() and not line.lstrip().startswith(("#", "![", "<!--"))]
+        bodies.append(content)
+        own = normalize_title(st["title"])
+        if "目录" in st["title"]:
+            continue
+        for lineno, text in content:
+            key = normalize_title(text)
+            if key in title_map and key != own:
+                merged.append((st["file"], lineno, title_map[key], text[:70]))
+                continue
+            for title_key, raw_title in title_map.items():
+                if title_key == own or len(title_key) < 4:
+                    continue
+                if key.startswith(title_key) and len(key) > len(title_key) + 8:
+                    merged.append((st["file"], lineno, raw_title, text[:70]))
+                    break
+    for index, (st, content) in enumerate(zip(chapter_stats, bodies)):
+        if not content:
+            continue
+        first_line = content[0][1]
+        last_line = content[-1][1]
+        previous_unfinished = bool(index > 0 and bodies[index - 1]
+                                   and bodies[index - 1][-1][1][-1:] not in SENTENCE_END)
+        if previous_unfinished and len(normalize_para(first_line)) <= 12 \
+                and first_line[-1:] in SENTENCE_END:
+            cut_heads.append((st["file"], content[0][0], first_line))
+        if index + 1 < len(bodies) and last_line[-1:] not in SENTENCE_END:
+            cut_tails.append((st["file"], content[-1][0], last_line[-70:]))
+    return merged, cut_heads, cut_tails
+
+
+def preview(items, limit=20):
+    """报告只列少量样本，避免异常漫画书产生数千行终端/报告输出。"""
+    if not items:
+        return "无"
+    shown = items[:limit]
+    suffix = f"（另有 {len(items) - limit} 项未展开）" if len(items) > limit else ""
+    return f"{shown}{suffix}"
+
+
 def image_magic_ok(path):
     with open(path, 'rb') as f:
         head = f.read(16)
@@ -114,7 +166,7 @@ def run_embedded_tests():
     return f"pytest tests/ → {tail[-1] if tail else '(无输出)'}"
 
 
-def main(book_id, baseline_path=None, report_out=None) -> int:
+def main(book_id, baseline_path=None, report_out=None, verbose=False) -> int:
     book_dir = wc.book_dir(book_id)
     if not os.path.isdir(book_dir):
         print(f"⛔ 输入缺失：找不到状态目录 {book_dir}（先跑预检 / 导出）")
@@ -135,10 +187,12 @@ def main(book_id, baseline_path=None, report_out=None) -> int:
 
     lines = []
 
-    def emit(s=""):
+    def emit(s="", console=False):
         lines.append(s)
-        print(s)
+        if verbose or console:
+            print(s)
 
+    print("正在本机核验章节和图片（不会把图片内容发送给 Agent）……")
     emit("=" * 72)
     emit("  导出核验报告")
     emit("=" * 72)
@@ -206,10 +260,10 @@ def main(book_id, baseline_path=None, report_out=None) -> int:
     missing = [c["title"] for c in platform
                if normalize_title(c["title"]) not in local_keys]
     emit()
-    emit(f"平台有、本地缺的章节: {missing or '无'}")
-    emit(f"本地有、平台无同名: {unmatched or '无'}")
+    emit(f"平台有、本地缺的章节: {preview(missing)}")
+    emit(f"本地有、平台无同名: {preview(unmatched)}")
     if short:
-        emit(f"偏短章节: {short}")
+        emit(f"偏短章节: {preview(short)}")
 
     # ---------- 重复检测 ----------
     emit()
@@ -246,15 +300,31 @@ def main(book_id, baseline_path=None, report_out=None) -> int:
     for fname, lineno, raw, snippet in glued[:6]:
         emit(f"    {fname}:{lineno} 「{raw[:26]}」 → {snippet}…")
     emit(f"标题字符被织进正文行中部（乱码）: {len(interleaved)} 处（含正文自然提到标题的误报）")
-    for fname, lineno, raw, snippet in interleaved:
+    for fname, lineno, raw, snippet in interleaved[:20]:
         emit(f"    {fname}:{lineno} 「{raw[:26]}」 → {snippet}…")
+
+    merged_titles, cut_heads, cut_tails = find_boundary_anomalies(
+        book_dir, chapter_stats, platform)
+    emit(f"疑似串章（出现另一章标题）: {len(merged_titles)} 处")
+    for fname, lineno, raw, snippet in merged_titles[:20]:
+        emit(f"    {fname}:{lineno} 「{raw[:26]}」 → {snippet}…")
+    emit(f"疑似断头短句: {len(cut_heads)} 处（提示项，可能含正常短句）")
+    for fname, lineno, snippet in cut_heads[:20]:
+        emit(f"    {fname}:{lineno} {snippet}")
+    emit(f"疑似断尾残句: {len(cut_tails)} 处（提示项，可能含正常标题）")
+    for fname, lineno, snippet in cut_tails[:20]:
+        emit(f"    {fname}:{lineno} {snippet}")
 
     # ---------- 图片 ----------
     emit()
     refs = []
+    unresolved_archives = []
     for path in md_files:
-        for m in MD_IMG_RE.finditer(Path(path).read_text(encoding="utf-8")):
+        chapter_text = Path(path).read_text(encoding="utf-8")
+        for m in MD_IMG_RE.finditer(chapter_text):
             refs.append(os.path.basename(m.group(1)))
+        if ARCHIVE_MARKER_RE.search(chapter_text):
+            unresolved_archives.append(os.path.basename(path))
     disk = [f for f in os.listdir(img_dir) if not f.startswith('.')] if os.path.isdir(img_dir) else []
     broken = [r for r in refs if r not in disk]
     bad = []
@@ -268,10 +338,11 @@ def main(book_id, baseline_path=None, report_out=None) -> int:
             bad.append(f"{f}({kind or '非法格式'},{size}B)")
     emit(f"正文图片引用数: {len(refs)}   图片文件数: {len(disk)}   "
          f"合计 {total_bytes:,} bytes")
-    emit(f"失效引用: {broken or '无'}")
-    emit(f"损坏/异常图片: {bad or '无'}")
+    emit(f"失效引用: {preview(broken)}")
+    emit(f"损坏/异常图片: {preview(bad)}")
     unused = [f for f in disk if f not in set(refs)]
-    emit(f"未被引用的图片文件: {unused or '无'}")
+    emit(f"未被引用的图片文件: {preview(unused)}")
+    emit(f"未展开的图片包章节: {preview(unresolved_archives)}")
 
     # ---------- 结尾判定 ----------
     emit()
@@ -304,16 +375,28 @@ def main(book_id, baseline_path=None, report_out=None) -> int:
         passed = False
     if dup_chapters:
         passed = False
+    if merged_titles:
+        passed = False
     if broken:
         passed = False
     if unused:
         passed = False
-    emit(f"核验结论: {'✅ 达标' if passed else '⛔ 未达标'}")
+    if unresolved_archives:
+        passed = False
+    conclusion = '✅ 达标' if passed else '⛔ 未达标'
+    emit(f"核验结论: {conclusion}")
 
     report_path = os.path.join(book_dir, "_verify_report.txt")
     with open(report_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
-    print(f"\n报告已写入: {report_path}")
+    print(f"核验结论: {conclusion}")
+    print(f"章节 {len(md_files)} 个；图片引用 {len(refs)} 个；"
+          f"失效 {len(broken)} 个；异常 {len(bad)} 个；未引用 {len(unused)} 个")
+    if unresolved_archives:
+        print(f"未展开的图片包章节 {len(unresolved_archives)} 个（请重跑图片下载）")
+    print(f"结构提示：疑似串章 {len(merged_titles)} 处，断头 {len(cut_heads)} 处，"
+          f"断尾 {len(cut_tails)} 处")
+    print(f"报告已写入: {report_path}")
     if report_out:
         os.makedirs(os.path.dirname(os.path.abspath(report_out)), exist_ok=True)
         with open(report_out, "w", encoding="utf-8") as f:
@@ -324,6 +407,7 @@ def main(book_id, baseline_path=None, report_out=None) -> int:
 
 def _parse_args(argv):
     report_out = None
+    verbose = False
     positional = []
     i = 0
     while i < len(argv):
@@ -331,21 +415,25 @@ def _parse_args(argv):
             report_out = argv[i + 1] if i + 1 < len(argv) else None
             i += 2
             continue
+        if argv[i] == "--verbose":
+            verbose = True
+            i += 1
+            continue
         positional.append(argv[i])
         i += 1
-    return positional, report_out
+    return positional, report_out, verbose
 
 
 if __name__ == "__main__":
     usage = ("用法: python3 verify_export.py <book_id> [平台章节清单.json] "
-             "[--report-out <路径>]")
+             "[--report-out <路径>] [--verbose]")
     if len(sys.argv) < 2:
         print(usage)
         sys.exit(wc.EXIT_USAGE)
-    _positional, _report_out = _parse_args(sys.argv[1:])
+    _positional, _report_out, _verbose = _parse_args(sys.argv[1:])
     if not _positional:
         print(usage)
         sys.exit(wc.EXIT_USAGE)
     sys.exit(main(wc.parse_book_id(_positional[0]),
                   _positional[1] if len(_positional) > 1 else None,
-                  _report_out))
+                  _report_out, _verbose))
