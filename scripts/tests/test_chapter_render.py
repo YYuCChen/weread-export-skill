@@ -115,5 +115,5 @@ def test_save_chapter_keeps_empty_catalog_page(tmp_path) -> None:
 
     assert text_len == 0
     assert images == []
-    assert (markdown_dir / "0001.md").read_text() == "# 版权信息\n\n"
+    assert (markdown_dir / "0001.md").read_text(encoding="utf-8") == "# 版权信息\n\n"
     assert (raw_dir / "0001.json").exists()
